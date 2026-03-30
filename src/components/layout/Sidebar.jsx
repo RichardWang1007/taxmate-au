@@ -69,7 +69,6 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        <span className="nav-section-label">Navigation</span>
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.path}
