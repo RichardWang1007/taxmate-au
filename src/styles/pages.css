@@ -964,3 +964,149 @@
   color: #f08080;
   background: rgba(240, 128, 128, 0.1);
 }
+
+/* Deduction cards */
+.deduction-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deduction-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  transition: border-color var(--transition);
+}
+
+.deduction-card:hover {
+  border-color: rgba(200, 240, 96, 0.15);
+}
+
+.deduction-card--approved {
+  border-color: rgba(111, 207, 151, 0.2);
+}
+
+.deduction-card--rejected {
+  opacity: 0.45;
+}
+
+.deduction-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.deduction-card-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deduction-card-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.deduction-amount {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.deduction-date {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.deduction-description {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.deduction-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.category-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-badge--approved {
+  background: rgba(111, 207, 151, 0.12);
+  border: 1px solid rgba(111, 207, 151, 0.25);
+  color: #6fcf97;
+}
+
+.status-badge--rejected {
+  background: rgba(240, 128, 128, 0.1);
+  border: 1px solid rgba(240, 128, 128, 0.2);
+  color: #f08080;
+}
+
+/* Category filter pills */
+.category-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.category-filter-pill {
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.category-filter-pill:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.category-filter-pill--active {
+  background: var(--accent-dim);
+  border-color: rgba(200, 240, 96, 0.2);
+  color: var(--accent);
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.empty-state-icon {
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
