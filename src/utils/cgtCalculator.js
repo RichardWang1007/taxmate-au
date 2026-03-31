@@ -11,7 +11,8 @@
  *   costBaseAUD: number,
  *   gainLoss: number,
  *   isDiscountEligible: boolean,
- *   discountedGain: number
+ *   discountedGain: number,
+ *   source: string
  * }} CGTEvent
  *
  * @typedef {{
@@ -28,7 +29,12 @@ const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000
 /**
  * Calculate CGT events using FIFO cost base tracking.
  *
- * @param {Array} transactions - Parsed transactions from csvParser, sorted by date asc.
+ * Accepts normalised transaction shape:
+ *   { date, type, asset, amount, costPerUnitAUD, totalAUD, feeAUD, source }
+ *
+ * Backward-compatible with old shape that used `rateAUD` instead of `costPerUnitAUD`.
+ *
+ * @param {Array} transactions - Parsed transactions, sorted by date asc.
  * @returns {{ events: CGTEvent[], summary: CGTSummary }}
  */
 export function calculateCGT(transactions) {
@@ -43,21 +49,31 @@ export function calculateCGT(transactions) {
   const events = []
 
   for (const tx of sorted) {
-    const { asset, type, amount, rateAUD, feeAUD, totalAUD, date } = tx
+    const { asset, type, amount, feeAUD, totalAUD, date, source } = tx
+
+    // Support both new `costPerUnitAUD` and legacy `rateAUD` field names
+    const costPerUnitAUD = tx.costPerUnitAUD ?? tx.rateAUD ?? 0
 
     if (type === 'buy') {
-      // Cost per unit = (total paid including fee) / amount acquired
-      const totalCost = totalAUD + (feeAUD || 0)
-      const costPerUnit = totalCost / amount
+      // Cost base per unit: use costPerUnitAUD if available, otherwise derive from totalAUD/amount
+      const effectiveCostPerUnit =
+        costPerUnitAUD > 0
+          ? costPerUnitAUD
+          : totalAUD > 0 && amount > 0
+          ? totalAUD / amount
+          : 0
+
+      // Include fee in cost base
+      const totalCost = (effectiveCostPerUnit * amount) + (feeAUD || 0)
+      const costPerUnit = amount > 0 ? totalCost / amount : 0
 
       if (!queues.has(asset)) queues.set(asset, [])
       queues.get(asset).push({ date, amount, costPerUnit })
     } else if (type === 'sell') {
       if (!queues.has(asset) || queues.get(asset).length === 0) {
-        // No acquisition history — skip (or treat cost base as 0)
+        // No acquisition history — cost base is 0
         const proceeds = totalAUD - (feeAUD || 0)
         const gainLoss = proceeds
-        const isDiscountEligible = false
         events.push({
           date,
           asset,
@@ -65,8 +81,9 @@ export function calculateCGT(transactions) {
           proceedsAUD: proceeds,
           costBaseAUD: 0,
           gainLoss,
-          isDiscountEligible,
+          isDiscountEligible: false,
           discountedGain: gainLoss,
+          source: source || 'Unknown',
         })
         continue
       }
@@ -118,6 +135,7 @@ export function calculateCGT(transactions) {
         gainLoss,
         isDiscountEligible,
         discountedGain,
+        source: source || 'Unknown',
       })
     }
   }
@@ -134,20 +152,18 @@ export function calculateCGT(transactions) {
       totalLoss += ev.gainLoss // negative number
     }
     if (ev.isDiscountEligible) {
-      discountApplied += ev.gainLoss - ev.discountedGain // amount of discount
+      discountApplied += ev.gainLoss - ev.discountedGain
     }
   }
 
-  const netCGT = totalGain + discountApplied * -1 + totalLoss
-  // Simpler: sum of all discountedGain values minus losses
-  const netCGT2 = events.reduce((sum, ev) => sum + ev.discountedGain, 0)
+  const netCGT = events.reduce((sum, ev) => sum + ev.discountedGain, 0)
 
   /** @type {CGTSummary} */
   const summary = {
     totalGain,
     totalLoss,
     discountApplied,
-    netCGT: netCGT2,
+    netCGT,
     eventCount: events.length,
   }
 
