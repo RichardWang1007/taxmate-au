@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import '../styles/pages.css'
 import { detectAndParse } from '../utils/parsers/index.js'
 import { calculateCGT } from '../utils/cgtCalculator'
+import { useTax } from '../context/TaxContext'
 
 function fmtAUD(value) {
   return new Intl.NumberFormat('en-AU', {
@@ -47,8 +48,7 @@ function runCGT(sources) {
 }
 
 export default function CryptoTax() {
-  const [sources, setSources] = useState([])
-  const [cgtResult, setCgtResult] = useState(null)
+  const { cryptoSources: sources, setCryptoSources: setSources, cgtResult, setCgtResult } = useTax()
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
   const [sortAsc, setSortAsc] = useState(true)

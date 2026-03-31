@@ -5,6 +5,7 @@ import {
   classifyTransaction,
   DEDUCTION_CATEGORIES,
 } from '../utils/parsers/bankStatement.js'
+import { useTax } from '../context/TaxContext'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -182,8 +183,8 @@ function ManualForm({ onAdd, onCancel }) {
 // ---------------------------------------------------------------------------
 
 export default function Deductions() {
+  const { deductionItems: flagged, setDeductionItems: setFlagged } = useTax()
   const [sources, setSources] = useState([])
-  const [flagged, setFlagged] = useState([])
   const [activeTab, setActiveTab] = useState('pending')
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)

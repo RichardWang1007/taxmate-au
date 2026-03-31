@@ -3,6 +3,7 @@ import '../styles/pages.css'
 import { parsePayslipCSV } from '../utils/parsers/payslip'
 import { calculateIncomeTax } from '../utils/taxCalculator'
 import { INCOME_FY } from '../data/sampleIncome'
+import { useTax } from '../context/TaxContext'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -645,8 +646,7 @@ function SummaryTab({ payslips, otherIncome }) {
 // ---------------------------------------------------------------------------
 
 export default function Income() {
-  const [payslips, setPayslips] = useState([])
-  const [otherIncome, setOtherIncome] = useState([])
+  const { payslips, setPayslips, otherIncome, setOtherIncome } = useTax()
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('payslips')

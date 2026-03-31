@@ -6,6 +6,7 @@ import CryptoTax from './pages/CryptoTax'
 import Deductions from './pages/Deductions'
 import Income from './pages/Income'
 import Lodgement from './pages/Lodgement'
+import { TaxProvider } from './context/TaxContext'
 import './App.css'
 
 function Layout() {
@@ -31,7 +32,9 @@ function Layout() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Layout />
+      <TaxProvider>
+        <Layout />
+      </TaxProvider>
     </BrowserRouter>
   )
 }
