@@ -27,6 +27,39 @@
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000
 
 /**
+ * Estimate net sell proceeds while handling exchange parser differences:
+ * - Some sources provide totalAUD as gross (fee excluded)
+ * - Others provide totalAUD as net (fee already deducted)
+ */
+function normaliseSellProceeds(tx, costPerUnitAUD) {
+  const amount = tx.amount || 0
+  const feeAUD = tx.feeAUD || 0
+  const totalAUD = tx.totalAUD || 0
+
+  const grossEstimate =
+    costPerUnitAUD > 0 && amount > 0
+      ? costPerUnitAUD * amount
+      : 0
+
+  // No total provided: derive from rate * amount, then deduct fee once.
+  if (totalAUD <= 0) {
+    return Math.max(0, grossEstimate - feeAUD)
+  }
+
+  if (grossEstimate > 0) {
+    // If total is already net (matches gross-fee within tolerance), use as-is.
+    const expectedNet = grossEstimate - feeAUD
+    const tolerance = Math.max(0.01, grossEstimate * 0.0001)
+    if (Math.abs(totalAUD - expectedNet) <= tolerance) {
+      return totalAUD
+    }
+  }
+
+  // Otherwise assume total is gross and deduct fee once.
+  return Math.max(0, totalAUD - feeAUD)
+}
+
+/**
  * Calculate CGT events using FIFO cost base tracking.
  *
  * Accepts normalised transaction shape:
@@ -72,7 +105,7 @@ export function calculateCGT(transactions) {
     } else if (type === 'sell') {
       if (!queues.has(asset) || queues.get(asset).length === 0) {
         // No acquisition history — cost base is 0
-        const proceeds = totalAUD - (feeAUD || 0)
+        const proceeds = normaliseSellProceeds(tx, costPerUnitAUD)
         const gainLoss = proceeds
         events.push({
           date,
@@ -114,8 +147,7 @@ export function calculateCGT(transactions) {
         }
       }
 
-      // Net proceeds = total received minus selling fees
-      const proceeds = totalAUD - (feeAUD || 0)
+      const proceeds = normaliseSellProceeds(tx, costPerUnitAUD)
       const gainLoss = proceeds - totalCostBase
 
       // 50% CGT discount: disposal must be > 12 months after oldest acquisition lot

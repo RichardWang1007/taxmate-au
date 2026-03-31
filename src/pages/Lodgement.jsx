@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTax } from '../context/TaxContext'
+import { useTax } from '../context/useTax'
 import { calculateIncomeTax } from '../utils/taxCalculator'
 import '../styles/pages.css'
 

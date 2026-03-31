@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import '../styles/pages.css'
-import { useTax } from '../context/TaxContext'
+import { useTax } from '../context/useTax'
 import { calculateIncomeTax } from '../utils/taxCalculator'
 
 function formatAUD(n) {
@@ -24,7 +24,17 @@ function moduleStatus(key, { cgtResult, deductionItems, payslips, otherIncome })
     case 'income': return (payslips.length > 0 || otherIncome.length > 0)
       ? (payslips.length > 0 ? 'Complete' : 'In progress')
       : 'Not started'
-    case 'lodgement': return 'Not started'
+    case 'lodgement': {
+      const hasIncome = payslips.length > 0 || otherIncome.length > 0
+      const hasCrypto = !!cgtResult
+      const hasDeductions = deductionItems.length > 0
+      const pendingDeductions = deductionItems.filter(d => d.status === 'pending').length
+      const deductionsReviewed = hasDeductions && pendingDeductions === 0
+
+      if (hasIncome && hasCrypto && deductionsReviewed) return 'Complete'
+      if (hasIncome || hasCrypto || hasDeductions) return 'In progress'
+      return 'Not started'
+    }
     default: return 'Not started'
   }
 }

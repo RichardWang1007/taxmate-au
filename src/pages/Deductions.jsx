@@ -5,7 +5,7 @@ import {
   classifyTransaction,
   DEDUCTION_CATEGORIES,
 } from '../utils/parsers/bankStatement.js'
-import { useTax } from '../context/TaxContext'
+import { useTax } from '../context/useTax'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -245,7 +245,7 @@ export default function Deductions() {
       }
     }
     reader.readAsText(file)
-  }, [])
+  }, [setFlagged])
 
   // ---- Drag and drop ----
 

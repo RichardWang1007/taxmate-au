@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import '../styles/pages.css'
 import { detectAndParse } from '../utils/parsers/index.js'
 import { calculateCGT } from '../utils/cgtCalculator'
-import { useTax } from '../context/TaxContext'
+import { useTax } from '../context/useTax'
 
 function fmtAUD(value) {
   return new Intl.NumberFormat('en-AU', {
@@ -63,7 +63,7 @@ export default function CryptoTax() {
   const recalculate = useCallback((updatedSources) => {
     const result = runCGT(updatedSources)
     setCgtResult(result)
-  }, [])
+  }, [setCgtResult])
 
   const processFile = useCallback((file) => {
     if (!file) return
@@ -94,7 +94,7 @@ export default function CryptoTax() {
       }
     }
     reader.readAsText(file)
-  }, [recalculate])
+  }, [recalculate, setSources])
 
   const removeSource = useCallback((id) => {
     setSources(prev => {
@@ -102,7 +102,7 @@ export default function CryptoTax() {
       recalculate(updated)
       return updated
     })
-  }, [recalculate])
+  }, [recalculate, setSources])
 
   const removeTransaction = useCallback((txId) => {
     setSources(prev => {
@@ -115,7 +115,7 @@ export default function CryptoTax() {
       recalculate(updated)
       return updated
     })
-  }, [recalculate])
+  }, [recalculate, setSources])
 
   const handleDragOver = (e) => {
     e.preventDefault()

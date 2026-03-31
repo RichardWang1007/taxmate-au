@@ -3,7 +3,7 @@ import '../styles/pages.css'
 import { parsePayslipCSV } from '../utils/parsers/payslip'
 import { calculateIncomeTax } from '../utils/taxCalculator'
 import { INCOME_FY } from '../data/sampleIncome'
-import { useTax } from '../context/TaxContext'
+import { useTax } from '../context/useTax'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -183,6 +183,14 @@ function PayslipsTab({ payslips, setPayslips, isDragging, setIsDragging, setErro
         }
         setPayslips(prev => {
           const toAdd = parsed.filter(p => !isDuplicate(prev, p))
+          const skippedCount = parsed.length - toAdd.length
+          if (skippedCount > 0) {
+            setError(
+              skippedCount === parsed.length
+                ? 'Duplicate upload detected: all payslips in this file were already added.'
+                : `Skipped ${skippedCount} duplicate payslip${skippedCount !== 1 ? 's' : ''}.`
+            )
+          }
           // Re-index ids to avoid collisions
           const reindexed = toAdd.map((p, i) => ({ ...p, id: `payslip-${prev.length + i}` }))
           return [...prev, ...reindexed]
