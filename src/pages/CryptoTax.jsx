@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback } from 'react'
 import '../styles/pages.css'
-import { detectAndParse } from '../utils/parsers/index.js'
+import { parseForExchange } from '../utils/parsers/index.js'
 import { calculateCGT } from '../utils/cgtCalculator'
 import { useTax } from '../context/useTax'
+import { buildCsvSnapshot, buildImportDebugReport } from '../utils/importDebug.js'
 
 function fmtAUD(value) {
   return new Intl.NumberFormat('en-AU', {
@@ -40,6 +41,16 @@ const FY_OPTIONS = [
   { value: '2022-23', label: 'FY 2022–23', start: new Date('2022-07-01'), end: new Date('2023-06-30T23:59:59.999') },
 ]
 
+const SUPPORTED_UPLOADS = [
+  { key: 'coinbase', label: 'Coinbase', hint: 'CSV export' },
+  { key: 'base-wallet', label: 'Base Wallet', hint: 'CSV export' },
+  { key: 'binance', label: 'Binance', hint: 'Trade history CSV' },
+  { key: 'kraken', label: 'Kraken', hint: 'Ledger CSV' },
+  { key: 'coinspot', label: 'CoinSpot', hint: 'Transaction CSV' },
+  { key: 'metamask', label: 'MetaMask', hint: 'Activity CSV' },
+  { key: 'uniswap', label: 'Uniswap', hint: 'Swap history CSV' },
+]
+
 // Helper: merge sources, sort, run CGT
 function runCGT(sources) {
   const all = sources.flatMap(s => s.transactions).sort((a, b) => a.date - b.date)
@@ -49,8 +60,10 @@ function runCGT(sources) {
 
 export default function CryptoTax() {
   const { cryptoSources: sources, setCryptoSources: setSources, cgtResult, setCgtResult } = useTax()
-  const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
+  /** @type {{ platform: string, fileName: string, userMessage: string, snapshot: ReturnType<typeof buildCsvSnapshot>, reason: string } | null} */
+  const [importDebug, setImportDebug] = useState(null)
+  const [copiedDebug, setCopiedDebug] = useState(false)
   const [sortAsc, setSortAsc] = useState(true)
   const [showManualForm, setShowManualForm] = useState(false)
   const [manualForm, setManualForm] = useState(EMPTY_MANUAL_FORM)
@@ -58,6 +71,7 @@ export default function CryptoTax() {
   const [activeTab, setActiveTab] = useState('cgt')
 
   const fileInputRef = useRef(null)
+  const selectedExchangeRef = useRef(null)
 
   // Merge all sources, sort by date, run CGT
   const recalculate = useCallback((updatedSources) => {
@@ -65,22 +79,40 @@ export default function CryptoTax() {
     setCgtResult(result)
   }, [setCgtResult])
 
-  const processFile = useCallback((file) => {
+  const processFile = useCallback((file, exchangeName) => {
     if (!file) return
     setError(null)
+    setImportDebug(null)
+    setCopiedDebug(false)
 
     const reader = new FileReader()
     reader.onload = (e) => {
+      const text = typeof e.target?.result === 'string' ? e.target.result : ''
+      const snapshot = buildCsvSnapshot(text)
+      const setFailure = (userMessage, reason) => {
+        setError(userMessage)
+        setImportDebug({
+          platform: exchangeName,
+          fileName: file.name,
+          userMessage,
+          snapshot,
+          reason,
+        })
+      }
+
       try {
-        const text = e.target.result
-        const { exchange, transactions } = detectAndParse(text)
+        const transactions = parseForExchange(exchangeName, text)
         if (transactions.length === 0) {
-          setError('No valid transactions found in the CSV.')
+          setFailure(
+            `No valid transactions found in ${exchangeName} CSV.`,
+            'The parser found no buy/sell rows it could map. Your file may use different column names, or you may need a different export (e.g. trades only, not transfers).'
+          )
           return
         }
+        setImportDebug(null)
         const newSource = {
           id: Date.now(),
-          exchange,
+          exchange: exchangeName,
           fileName: file.name,
           transactions,
         }
@@ -90,8 +122,22 @@ export default function CryptoTax() {
           return updated
         })
       } catch (err) {
-        setError(err.message || 'Failed to parse CSV file.')
+        const msg = err.message || 'Failed to parse CSV file.'
+        setFailure(
+          msg,
+          'Parse threw — often wrong platform selected, or CSV format changed from what the importer expects.'
+        )
       }
+    }
+    reader.onerror = () => {
+      setError('Could not read the file. Try again or check file permissions.')
+      setImportDebug({
+        platform: exchangeName,
+        fileName: file.name,
+        userMessage: 'File read failed',
+        snapshot: buildCsvSnapshot(''),
+        reason: 'The browser could not read this file as text.',
+      })
     }
     reader.readAsText(file)
   }, [recalculate, setSources])
@@ -117,35 +163,18 @@ export default function CryptoTax() {
     })
   }, [recalculate, setSources])
 
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const files = e.dataTransfer.files
-    if (files && files.length > 0) {
-      Array.from(files).forEach(processFile)
-    }
+  const handleExchangeUploadClick = (exchangeName) => {
+    selectedExchangeRef.current = exchangeName
+    fileInputRef.current?.click()
   }
 
   const handleFileChange = (e) => {
-    const files = e.target.files
-    if (files && files.length > 0) {
-      Array.from(files).forEach(processFile)
+    const file = e.target.files?.[0]
+    const exchangeName = selectedExchangeRef.current
+    if (file && exchangeName) {
+      processFile(file, exchangeName)
     }
     e.target.value = ''
-  }
-
-  const handleZoneClick = () => {
-    fileInputRef.current?.click()
   }
 
   const handleManualFormChange = (e) => {
@@ -163,6 +192,7 @@ export default function CryptoTax() {
     }
 
     setError(null)
+    setImportDebug(null)
 
     const parsedAmount = parseFloat(amount)
     const parsedPrice = parseFloat(costPerUnitAUD)
@@ -266,41 +296,52 @@ export default function CryptoTax() {
 
   const totalTransactionCount = sources.reduce((sum, s) => sum + s.transactions.length, 0)
 
+  function copyImportDebug() {
+    if (!importDebug) return
+    const report = buildImportDebugReport({
+      platform: importDebug.platform,
+      fileName: importDebug.fileName,
+      message: importDebug.userMessage,
+      snapshot: importDebug.snapshot,
+      reason: importDebug.reason,
+    })
+    navigator.clipboard.writeText(report).then(() => {
+      setCopiedDebug(true)
+      setTimeout(() => setCopiedDebug(false), 2000)
+    })
+  }
+
+  function dismissImportDebug() {
+    setImportDebug(null)
+    setError(null)
+  }
+
   return (
     <div className="page-container">
       <div className="page-header">
         <h1>Crypto Tax</h1>
-        <p>Upload transaction history from CoinSpot, Binance, CoinJar, or Kraken to calculate CGT events under ATO rules. Your data never leaves your device.</p>
+        <p>Upload exchange and wallet CSV exports by platform to calculate CGT events under ATO rules. Your data never leaves your device.</p>
       </div>
 
-      {/* Upload zone */}
-      <div
-        className={`upload-zone${isDragging ? ' upload-zone--dragging' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        style={{ marginBottom: '20px' }}
-      >
-        <div className="upload-zone-inner" onClick={handleZoneClick}>
-          <div className="upload-icon">
-            <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-              <path d="M18 6v18M10 14l8-8 8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M5 26v2.5A2.5 2.5 0 007.5 31h21a2.5 2.5 0 002.5-2.5V26" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <p className="upload-title">
-            {isDragging ? 'Drop your CSV(s) here' : 'Drag & drop exchange CSV files'}
-          </p>
-          <p className="upload-sub">
-            CoinSpot, Binance, CoinJar, Kraken — your data never leaves your device
-          </p>
-          <button
-            className="upload-btn"
-            onClick={(e) => { e.stopPropagation(); handleZoneClick() }}
-            type="button"
-          >
-            Browse files
-          </button>
+      <div className="exchange-importer" style={{ marginBottom: '20px' }}>
+        <div className="section-heading">
+          <h2>Import by Platform</h2>
+          <span className="section-sub">Pick an exchange or wallet, then upload its CSV export</span>
+        </div>
+        <div className="exchange-upload-grid">
+          {SUPPORTED_UPLOADS.map((platform) => (
+            <div className="exchange-upload-card" key={platform.key}>
+              <div className="exchange-upload-name">{platform.label}</div>
+              <div className="exchange-upload-hint">{platform.hint}</div>
+              <button
+                className="upload-btn upload-btn--small"
+                type="button"
+                onClick={() => handleExchangeUploadClick(platform.label)}
+              >
+                Upload {platform.label} CSV
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -308,7 +349,6 @@ export default function CryptoTax() {
         ref={fileInputRef}
         type="file"
         accept=".csv,text/csv"
-        multiple
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
@@ -316,6 +356,40 @@ export default function CryptoTax() {
       {/* Error */}
       {error && (
         <div className="error-banner">{error}</div>
+      )}
+
+      {importDebug && (
+        <div className="import-debug-panel">
+          <div className="import-debug-top">
+            <div>
+              <div className="import-debug-title">Import diagnostics</div>
+              <p className="import-debug-sub">
+                Local only — nothing is uploaded. Use this when an import fails so you can compare headers or paste into an issue.
+              </p>
+            </div>
+            <div className="import-debug-actions">
+              <button type="button" className="btn-ghost import-debug-btn" onClick={copyImportDebug}>
+                {copiedDebug ? 'Copied' : 'Copy report'}
+              </button>
+              <button type="button" className="btn-ghost import-debug-btn" onClick={dismissImportDebug}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+          <dl className="import-debug-meta">
+            <div><dt>Platform</dt><dd>{importDebug.platform}</dd></div>
+            <div><dt>File</dt><dd>{importDebug.fileName}</dd></div>
+            <div><dt>Lines / chars</dt><dd>{importDebug.snapshot.lineCount} / {importDebug.snapshot.charCount}</dd></div>
+            <div><dt>CSV-like header</dt><dd>{importDebug.snapshot.looksLikeCsv ? 'yes' : 'no'}</dd></div>
+          </dl>
+          {importDebug.reason && (
+            <p className="import-debug-reason">{importDebug.reason}</p>
+          )}
+          <div className="import-debug-label">First non-empty line (header)</div>
+          <pre className="import-debug-pre">{importDebug.snapshot.headerLine}</pre>
+          <div className="import-debug-label">Second non-empty line (sample)</div>
+          <pre className="import-debug-pre">{importDebug.snapshot.firstDataLine}</pre>
+        </div>
       )}
 
       {/* Sources list */}
@@ -343,7 +417,7 @@ export default function CryptoTax() {
       {!showManualForm && (
         <button
           className="btn-add-manual"
-          onClick={() => { setShowManualForm(true); setError(null) }}
+          onClick={() => { setShowManualForm(true); setError(null); setImportDebug(null) }}
           type="button"
         >
           <span>+</span> Add manual transaction
